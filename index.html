@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1565c0">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>bossGO Zeiterfassung</title>
+<style>
+  :root {
+    --blue: #1565c0; --bg: #f4f6f8; --card: #fff;
+    --arbeitszeit: #1565c0; --maschine: #6a1b9a; --spesen: #2e7d32;
+    --pikett: #ef6c00; --abwesenheit: #00838f;
+    --text: #1a1a1a; --muted: #6b7280;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    background: var(--blue); color: #fff;
+    padding: calc(16px + env(safe-area-inset-top)) 16px 20px;
+    border-radius: 0 0 20px 20px;
+  }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  select.mit {
+    background: rgba(255,255,255,.2); color: #fff; border: none;
+    padding: 6px 10px; border-radius: 8px; font-size: 14px;
+  }
+  select.mit option { color: #000; }
+  .datum { opacity: .85; font-size: 13px; margin: 4px 0 16px; }
+  .stats { display: flex; gap: 28px; }
+  .stat .v { font-size: 24px; font-weight: 700; }
+  .stat .l { opacity: .85; font-size: 13px; }
+  main { padding: 12px; }
+  .card {
+    background: var(--card); border-radius: 14px; padding: 12px 14px;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  }
+  .avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .card .body { flex: 1; min-width: 0; }
+  .card .t { font-weight: 600; }
+  .card .s { color: var(--muted); font-size: 13px; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .r { text-align: right; flex-shrink: 0; }
+  .card .r .val { font-weight: 600; }
+  .card .r .status { font-size: 12px; margin-top: 4px; }
+  .status.offen { color: #ef6c00; }
+  .status.validiert { color: #2e7d32; }
+  .empty { text-align: center; color: var(--muted); margin-top: 60px; }
+  .fab {
+    position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+    background: var(--blue); color: #fff; border: none;
+    padding: 14px 22px; border-radius: 30px; font-size: 16px; font-weight: 600;
+    box-shadow: 0 4px 16px rgba(21,101,192,.4); cursor: pointer;
+  }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4);
+    display: none; align-items: flex-end; z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .sheet {
+    background: #fff; width: 100%; border-radius: 20px 20px 0 0;
+    padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+    max-height: 92vh; overflow-y: auto;
+  }
+  .grip { width: 40px; height: 4px; background: #e0e0e0; border-radius: 2px; margin: 0 auto 16px; }
+  .sheet h2 { font-size: 18px; margin: 0 0 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip {
+    border: 1.5px solid #e0e0e0; background: #fff; border-radius: 20px;
+    padding: 8px 12px; font-size: 14px; cursor: pointer; display: flex;
+    align-items: center; gap: 6px;
+  }
+  .chip.active { border-color: currentColor; font-weight: 600; }
+  label.fld { display: block; margin-bottom: 12px; }
+  label.fld span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, textarea {
+    width: 100%; padding: 12px; border: 1.5px solid #e0e0e0;
+    border-radius: 10px; font-size: 16px; font-family: inherit;
+  }
+  .row { display: flex; gap: 12px; }
+  .row label.fld { flex: 1; }
+  .dauer { font-size: 14px; color: var(--muted); margin: -4px 0 12px; }
+  .save {
+    width: 100%; background: var(--blue); color: #fff; border: none;
+    padding: 14px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <h1>bossGO Zeiterfassung</h1>
+    <select class="mit" id="mitSel"></select>
+  </div>
+  <div class="datum" id="datum"></div>
+  <div class="stats">
+    <div class="stat"><div class="v" id="summe">0h 00min</div><div class="l">Erfasst heute</div></div>
+    <div class="stat"><div class="v" id="anzahl">0</div><div class="l">Einträge</div></div>
+  </div>
+</header>
+<main><div id="liste"></div></main>
+<button class="fab" id="fab">+ Erfassen</button>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <div class="grip"></div>
+    <h2>Neue Erfassung</h2>
+    <div class="chips" id="chips"></div>
+    <div id="zeitFelder">
+      <div class="row">
+        <label class="fld"><span>Von</span><input type="time" id="von" value="08:00"></label>
+        <label class="fld"><span>Bis</span><input type="time" id="bis" value="17:00"></label>
+      </div>
+      <div class="dauer" id="dauer"></div>
+    </div>
+    <label class="fld" id="betragFeld" style="display:none">
+      <span>Betrag (CHF)</span><input type="number" step="0.05" id="betrag" placeholder="0.00">
+    </label>
+    <label class="fld"><span>Beschreibung</span><textarea id="besch" rows="2"></textarea></label>
+    <button class="save" id="save">Speichern</button>
+  </div>
+</div>
+
+<script>
+const TYPEN = {
+  arbeitszeit:   { label: 'Arbeitszeit',        icon: '🕐', color: 'var(--arbeitszeit)' },
+  maschine:      { label: 'Maschine / Fahrzeug', icon: '🚜', color: 'var(--maschine)' },
+  spesen:        { label: 'Spesen',             icon: '🧾', color: 'var(--spesen)' },
+  pikett:        { label: 'Pikett',             icon: '🔔', color: 'var(--pikett)' },
+  abwesenheit:   { label: 'Abwesenheit',        icon: '🏖️', color: 'var(--abwesenheit)' },
+};
+const MITARBEITER = ['Max Muster', 'Reiner Zufall', 'Rosmarie Meier'];
+
+let state = {
+  mitarbeiter: MITARBEITER[0],
+  aktTyp: 'arbeitszeit',
+  eintraege: [],
+};
+
+function load() {
+  try {
+    const raw = localStorage.getItem('bossgo_eintraege');
+    if (raw) state.eintraege = JSON.parse(raw);
+    else seed();
+    const m = localStorage.getItem('bossgo_mitarbeiter');
+    if (m) state.mitarbeiter = m;
+  } catch (e) { seed(); }
+}
+function save() {
+  localStorage.setItem('bossgo_eintraege', JSON.stringify(state.eintraege));
+  localStorage.setItem('bossgo_mitarbeiter', state.mitarbeiter);
+}
+function seed() {
+  const t = todayISO();
+  state.eintraege = [
+    { id: 1, typ: 'arbeitszeit', datum: t, von: '08:00', bis: '12:00', besch: 'Projektarbeit AfBN', status: 'offen' },
+    { id: 2, typ: 'spesen', datum: t, betrag: 24.50, besch: 'Mittagessen Kunde', status: 'validiert' },
+  ];
+}
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+function dauerMin(von, bis) {
+  if (!von || !bis) return 0;
+  const [vh, vm] = von.split(':').map(Number);
+  let [bh, bm] = bis.split(':').map(Number);
+  let start = vh * 60 + vm, end = bh * 60 + bm;
+  if (end <= start) end += 24 * 60; // Mitternachts-Überlauf
+  return end - start;
+}
+function dauerLabel(min) {
+  return Math.floor(min / 60) + 'h ' + String(min % 60).padStart(2, '0') + 'min';
+}
+function bisLabel(bis) { return bis === '00:00' ? '24:00' : bis; }
+
+function render() {
+  document.getElementById('datum').textContent =
+    new Date().toLocaleDateString('de-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const heute = state.eintraege.filter(e => e.datum === todayISO());
+  const summe = heute.reduce((s, e) => s + dauerMin(e.von, e.bis), 0);
+  document.getElementById('summe').textContent = dauerLabel(summe);
+  document.getElementById('anzahl').textContent = heute.length;
+
+  const liste = document.getElementById('liste');
+  if (!heute.length) {
+    liste.innerHTML = '<div class="empty">Keine Einträge heute</div>';
+  } else {
+    liste.innerHTML = heute.map(e => {
+      const t = TYPEN[e.typ];
+      let sub = [];
+      if (e.von && e.bis) sub.push(e.von + ' – ' + bisLabel(e.bis));
+      if (e.besch) sub.push(e.besch);
+      const val = e.betrag != null ? 'CHF ' + e.betrag.toFixed(2)
+                : dauerMin(e.von, e.bis) > 0 ? dauerLabel(dauerMin(e.von, e.bis)) : '';
+      return `<div class="card">
+        <div class="avatar" style="background:${t.color}22;color:${t.color}">${t.icon}</div>
+        <div class="body"><div class="t">${t.label}</div><div class="s">${sub.join('  ·  ')}</div></div>
+        <div class="r"><div class="val">${val}</div>
+          <div class="status ${e.status}">${e.status === 'validiert' ? '✓ validiert' : '◷ offen'}</div></div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function renderChips() {
+  document.getElementById('chips').innerHTML = Object.entries(TYPEN).map(([k, t]) =>
+    `<div class="chip ${k === state.aktTyp ? 'active' : ''}" data-typ="${k}"
+       style="${k === state.aktTyp ? 'color:' + t.color : ''}">${t.icon} ${t.label}</div>`
+  ).join('');
+  document.querySelectorAll('.chip').forEach(c =>
+    c.onclick = () => { state.aktTyp = c.dataset.typ; renderChips(); toggleFelder(); });
+}
+
+function toggleFelder() {
+  const istSpesen = state.aktTyp === 'spesen';
+  document.getElementById('zeitFelder').style.display = istSpesen ? 'none' : 'block';
+  document.getElementById('betragFeld').style.display = istSpesen ? 'block' : 'none';
+  updateDauer();
+}
+function updateDauer() {
+  const v = document.getElementById('von').value, b = document.getElementById('bis').value;
+  document.getElementById('dauer').textContent = 'Dauer: ' + dauerLabel(dauerMin(v, b));
+}
+
+// Init
+load();
+document.getElementById('mitSel').innerHTML = MITARBEITER.map(m =>
+  `<option ${m === state.mitarbeiter ? 'selected' : ''}>${m}</option>`).join('');
+document.getElementById('mitSel').onchange = (e) => { state.mitarbeiter = e.target.value; save(); };
+document.getElementById('von').oninput = updateDauer;
+document.getElementById('bis').oninput = updateDauer;
+renderChips(); toggleFelder(); render();
+
+const overlay = document.getElementById('overlay');
+document.getElementById('fab').onclick = () => overlay.classList.add('show');
+overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove('show'); };
+
+document.getElementById('save').onclick = () => {
+  const typ = state.aktTyp;
+  const eintrag = {
+    id: Date.now(), typ, datum: todayISO(),
+    besch: document.getElementById('besch').value, status: 'offen',
+  };
+  if (typ === 'spesen') {
+    eintrag.betrag = parseFloat(document.getElementById('betrag').value) || 0;
+  } else {
+    eintrag.von = document.getElementById('von').value;
+    eintrag.bis = document.getElementById('bis').value;
+  }
+  state.eintraege.unshift(eintrag);
+  save(); render();
+  overlay.classList.remove('show');
+  document.getElementById('besch').value = '';
+  document.getElementById('betrag').value = '';
+};
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
